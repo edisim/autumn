@@ -19,8 +19,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      target: server
-    command: ["bun", "start"]
+    image: edisim/autumn:coolify
     restart: unless-stopped
     depends_on:
       - postgres
@@ -33,13 +32,10 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8080:8080"
+    command: ["bun", "start"]
 
   autumn-workers:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      target: workers
-    command: ["bun", "workers"]
+    image: edisim/autumn:coolify
     restart: unless-stopped
     depends_on:
       - postgres
@@ -48,6 +44,7 @@ services:
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgres://autumn:${POSTGRES_PASSWORD}@postgres:5432/autumn
+    command: ["bun", "workers"]
 
 volumes:
   autumn_postgres:
