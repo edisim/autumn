@@ -1,50 +1,119 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
-    restart: unless-stopped
     environment:
-      POSTGRES_USER: autumn
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: autumn
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - autumn_postgres:/var/lib/postgresql/data
+      - autumn-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autumn"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
-  redis:
-    image: valkey/valkey:8.0
+  valkey:
+    image: docker.io/valkey/valkey:8.0
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - VALKEY_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    volumes:
+      - autumn-valkey:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   autumn-api:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: edisim/autumn:coolify
-    restart: unless-stopped
-    depends_on:
-      - postgres
-      - redis
     environment:
       NODE_ENV: production
-      PORT: 8080
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgres://autumn:${POSTGRES_PASSWORD}@postgres:5432/autumn
-      JWT_SECRET: ${JWT_SECRET}
-    expose:
-      - "8080"
-    command: ["bun", "start"]
+      SERVER_PORT: 8080
+
+      # Required
+      DATABASE_URL: ${DATABASE_URL}
+      CACHE_URL: ${CACHE_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
+      ENCRYPTION_IV: ${ENCRYPTION_IV}
+
+      # Recommended (CORS / UI)
+      CLIENT_URL: ${CLIENT_URL}
+
+      # Optional integrations (warnings only if missing)
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_DOMAIN: ${RESEND_DOMAIN}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL}
+      CLICKHOUSE_USERNAME: ${CLICKHOUSE_USERNAME}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      SVIX_API_KEY: ${SVIX_API_KEY}
+
+      # TLS for cache (optional)
+      CACHE_CERT: ${CACHE_CERT}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: unless-stopped
 
   autumn-workers:
-    image: edisim/autumn:coolify
-    restart: unless-stopped
-    depends_on:
-      - postgres
-      - redis
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["bun", "workers"]
     environment:
       NODE_ENV: production
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgres://autumn:${POSTGRES_PASSWORD}@postgres:5432/autumn
-    command: ["bun", "workers"]
+
+      # Required (workers brauchen DB + cache genauso)
+      DATABASE_URL: ${DATABASE_URL}
+      CACHE_URL: ${CACHE_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
+      ENCRYPTION_IV: ${ENCRYPTION_IV}
+
+      # Queue selection:
+      # - BullMQ: QUEUE_URL setzen
+      # - SQS: SQS_QUEUE_URL + AWS creds setzen
+      QUEUE_URL: ${QUEUE_URL}
+
+      # Optional TLS for BullMQ redis
+      QUEUE_CERT: ${QUEUE_CERT}
+      QUEUE_CERT_PATH: ${QUEUE_CERT_PATH}
+
+      # Optional Hatchet (nur wenn du es nutzt)
+      HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN}
+
+      # Optional integrations (warnings only if missing)
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_DOMAIN: ${RESEND_DOMAIN}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL}
+      CLICKHOUSE_USERNAME: ${CLICKHOUSE_USERNAME}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      SVIX_API_KEY: ${SVIX_API_KEY}
+
+      CACHE_CERT: ${CACHE_CERT}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
-  autumn_postgres:
+  autumn-postgres:
+  autumn-valkey:
