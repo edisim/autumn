@@ -30,8 +30,8 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgres://autumn:${POSTGRES_PASSWORD}@postgres:5432/autumn
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     command: ["bun", "start"]
 
   autumn-workers:
